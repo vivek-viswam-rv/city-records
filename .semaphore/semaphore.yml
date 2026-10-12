@@ -24,6 +24,7 @@ blocks:
           commands:
             - cd pipeline
             - uv sync --frozen
+            - uv run dg check defs
             - uv run pytest -q
         - name: API tests
           commands:

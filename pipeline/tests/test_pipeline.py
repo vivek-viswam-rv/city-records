@@ -3,7 +3,7 @@ import hashlib
 import pytest
 
 from cityrecords import enrich
-from cityrecords.automation import previous_business_day_key
+from cityrecords.defs.automation import previous_business_day_key
 from cityrecords.text import content_sha256, normalize_vendor, row_to_notice, strip_html
 from cityrecords.vendors_util import match_vendor
 
