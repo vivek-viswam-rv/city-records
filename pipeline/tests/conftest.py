@@ -4,10 +4,11 @@ from pathlib import Path
 
 import pytest
 
-# Tests never talk to Langfuse. Set (not pop) so the dev .env loaded by cityrecords.definitions
-# cannot re-enable it: python-dotenv does not override variables that already exist.
-os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "")
-os.environ.setdefault("LANGFUSE_SECRET_KEY", "")
+# Tests never talk to Langfuse, even when the developer's shell has exported the dev .env.
+# Force the keys empty (not pop): the .env loaded by cityrecords.definitions cannot re-enable
+# tracing because python-dotenv does not override variables that already exist.
+os.environ["LANGFUSE_PUBLIC_KEY"] = ""
+os.environ["LANGFUSE_SECRET_KEY"] = ""
 
 
 @pytest.fixture
