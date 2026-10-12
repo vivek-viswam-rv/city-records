@@ -25,9 +25,15 @@ blocks:
   - name: Pipeline
     dependencies: []
     task:
+      env_vars:
+        # dg check defs loads dagster.yaml from DAGSTER_HOME; point it at an empty dir so the
+        # Postgres storage config (and its DATABASE_URL) is not required just to validate definitions.
+        - name: DAGSTER_HOME
+          value: /tmp/dagster-ci
       jobs:
         - name: dg check defs + pytest
           commands:
+            - mkdir -p "$DAGSTER_HOME"
             - cd pipeline
             - cache restore uv-pipeline-$(checksum uv.lock)
             - uv sync --frozen
@@ -55,7 +61,7 @@ blocks:
           commands:
             - cd web
             - sem-version node 22
-            - npm install -g pnpm
+            - npm install -g pnpm@10.33.0
             - cache restore pnpm-$(checksum pnpm-lock.yaml)
             - pnpm install --frozen-lockfile
             - cache store pnpm-$(checksum pnpm-lock.yaml) node_modules
