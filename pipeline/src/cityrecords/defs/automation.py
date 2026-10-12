@@ -7,6 +7,7 @@ import dagster as dg
 from .assets import GROUP
 
 daily_job = dg.define_asset_job("daily_job", selection=dg.AssetSelection.groups(GROUP))
+FAILURE_TAGS = ["pipeline"]  # Honeybadger's GitHub integration turns this into the issue label
 
 
 def previous_business_day_key(tick_date) -> str:
@@ -37,6 +38,7 @@ def run_failure_sensor(context: dg.RunFailureSensorContext):
         from honeybadger import honeybadger
 
         honeybadger.configure(api_key=api_key, environment=os.getenv("APP_ENV", "production"))
-        honeybadger.notify(error_class="DagsterRunFailure", error_message=msg, context=ctx)
+        honeybadger.notify(error_class="DagsterRunFailure", error_message=msg, context=ctx, tags=FAILURE_TAGS,
+                           fingerprint=f"{run.job_name}:{ctx['partition']}")
     else:
         context.log.error(f"DagsterRunFailure (HONEYBADGER_API_KEY unset): {msg} {ctx}")

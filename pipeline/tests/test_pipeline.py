@@ -134,3 +134,26 @@ def test_each_bedrock_call_is_recorded_as_a_generation(monkeypatch):
     assert gens[0].updates[0]["usage_details"] == {"input": 100, "output": 50, "total": 150}
     assert gens[0].updates[0]["output"] == "not json"
     assert opened[1]["metadata"]["attempt"] == 1 and opened[1]["model_parameters"]["temperature"] == 0.3
+
+
+def test_run_failure_sensor_tags_pipeline(monkeypatch):
+    import dagster as dg
+    from honeybadger import honeybadger
+    from cityrecords.defs import automation
+
+    calls = []
+    monkeypatch.setenv("HONEYBADGER_API_KEY", "hb-test")
+    monkeypatch.setattr(honeybadger, "configure", lambda **kw: None)
+    monkeypatch.setattr(honeybadger, "notify", lambda **kw: calls.append(kw))
+
+    instance = dg.DagsterInstance.ephemeral()
+    run = dg.DagsterRun(job_name="daily_job", run_id="r1", tags={"dagster/partition": "2026-10-01"})
+    event = dg.DagsterEvent(event_type_value="PIPELINE_FAILURE", job_name="daily_job", message="asset blew up")
+    ctx = dg.build_run_status_sensor_context(
+        sensor_name="run_failure_sensor", dagster_instance=instance, dagster_run=run, dagster_event=event,
+    ).for_run_failure()
+    automation.run_failure_sensor(ctx)
+    assert len(calls) == 1
+    kw = calls[0]
+    assert kw["tags"] == ["pipeline"] and kw["error_class"] == "DagsterRunFailure"
+    assert kw["context"]["partition"] == "2026-10-01" and kw["fingerprint"] == "daily_job:2026-10-01"
