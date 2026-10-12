@@ -16,6 +16,8 @@ apply_secret() { # ns name args...
 DB_PASSWORD="$(python3 -c 'import os,urllib.parse as u; print(u.unquote(u.urlparse(os.environ["DATABASE_URL"]).password or ""), end="")')"
 
 ARGS=()
+# Each component reports to its own Honeybadger project, so its HONEYBADGER_API_KEY is that project's key.
+HONEYBADGER_API_KEY="${HONEYBADGER_API_KEY_PIPELINE:-}"
 for v in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_REGION S3_BUCKET BEDROCK_MODEL_ID DATABASE_URL \
          HONEYBADGER_API_KEY LANGFUSE_SECRET_KEY LANGFUSE_PUBLIC_KEY LANGFUSE_HOST SOCRATA_APP_TOKEN; do
   if [ -n "${!v:-}" ]; then ARGS+=("--from-literal=$v=${!v}"); else echo "warning: $v unset/empty, skipped" >&2; fi
@@ -25,4 +27,4 @@ apply_secret dagster dagster-postgresql-secret "--from-literal=postgresql-passwo
 apply_secret app api-env \
   "--from-literal=DATABASE_POOL_URL=${DATABASE_POOL_URL:?}" \
   "--from-literal=API_KEY=${API_KEY:?}" \
-  "--from-literal=HONEYBADGER_API_KEY=${HONEYBADGER_API_KEY:-}"
+  "--from-literal=HONEYBADGER_API_KEY=${HONEYBADGER_API_KEY_BACKEND:-}"
