@@ -121,7 +121,7 @@ kubectl -n dagster port-forward svc/dagster-dagster-webserver 3000:80   # Dagste
 kubectl -n app logs deploy/api
 ```
 
-Frontend (Vercel project with root directory `web`, framework Vite, build `pnpm build`, output `dist`): `web/vercel.json` rewrites everything except `/api/*` to `index.html`; `/api/*` is rewritten to the serverless function `web/api/proxy.js` (an explicit rewrite, because a filesystem catch-all only matched single-segment paths in production), which forwards to `API_HOST` and adds the `x-api-key` header server-side. Set `API_HOST` and `API_KEY` as Vercel environment variables, and leave `VITE_API_KEY` unset in production.
+Frontend (Vercel project linked to this GitHub repo, root directory `web`, framework Vite): pull requests get preview deployments automatically; production deploys of `main` are disabled in `web/vercel.json` (`git.deploymentEnabled.main: false`) and instead triggered by the Semaphore deploy promotion through a Vercel deploy hook (secret `city-records-vercel`), so the dashboard, API and pipeline ship together. `web/vercel.json` rewrites everything except `/api/*` to `index.html`; `/api/*` is rewritten to the serverless function `web/api/proxy.js` (an explicit rewrite, because a filesystem catch-all only matched single-segment paths in production), which forwards to `API_HOST` and adds the `x-api-key` header server-side. Set `API_HOST` and `API_KEY` as Vercel environment variables, and leave `VITE_API_KEY` unset in production.
 
 Connect Claude Code to the MCP server:
 

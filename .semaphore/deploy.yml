@@ -11,12 +11,20 @@ blocks:
       secrets:
         - name: city-records-gcp      # GCP_SA_KEY (base64 service-account JSON), GCP_PROJECT_ID, GCP_REGION
         - name: city-records-app      # the .env values (see .env.example)
+        - name: city-records-vercel   # VERCEL_DEPLOY_HOOK_URL (Vercel project > Settings > Git > Deploy Hooks, ref main)
       env_vars:
         - name: REGISTRY
           value: us-east1-docker.pkg.dev/city-records-511405/city-records
         - name: CLUSTER
           value: city-records
       jobs:
+        - name: Dashboard (Vercel)
+          commands:
+            # Vercel is linked to the GitHub repo but production auto-deploys are disabled in web/vercel.json,
+            # so the dashboard ships only from this promotion: the hook makes Vercel build `main` from GitHub.
+            - 'test "$SEMAPHORE_GIT_BRANCH" = "main" || { echo "dashboard deploys only from main"; exit 0; }'
+            - 'curl -sf -X POST "$VERCEL_DEPLOY_HOOK_URL" | tee /tmp/vercel-hook.json'
+            - 'python3 -c "import json; j=json.load(open(\"/tmp/vercel-hook.json\")); print(\"queued Vercel job\", j.get(\"job\", {}).get(\"id\"), j.get(\"job\", {}).get(\"state\"))"'
         - name: Images, Helm, kubectl
           commands:
             - checkout
