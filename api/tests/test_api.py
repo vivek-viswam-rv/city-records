@@ -107,8 +107,14 @@ def test_debug_raise_requires_key_and_reports(monkeypatch):
     from cityrecords_api import main
 
     calls = []
-    monkeypatch.setattr(main, "honeybadger", type("HB", (), {"notify": lambda self, exc, **kw: calls.append(kw)})())
+    monkeypatch.setattr(main, "honeybadger", type("HB", (), {"notify": lambda self, exc, **kw: calls.append({**kw, "exc": exc})})())
     c = TestClient(app, raise_server_exceptions=False)
     assert c.get("/debug/raise").status_code == 401
     assert c.get("/debug/raise", headers=H).status_code == 500
     assert calls[0]["tags"] == ["backend", "bug"] and calls[0]["context"]["path"] == "/debug/raise"
+    assert c.get("/debug/raise?kind=value", headers=H).status_code == 500
+    assert isinstance(main_calls_exc(calls), ValueError)
+
+
+def main_calls_exc(calls):
+    return calls[-1].get("exc")

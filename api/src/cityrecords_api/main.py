@@ -32,11 +32,15 @@ async def _catch_all(request: Request, exc: Exception):
     return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
 
 
+SMOKE_ERRORS = {"runtime": RuntimeError, "value": ValueError, "lookup": LookupError}
+
+
 @app.get("/debug/raise", include_in_schema=False)
-async def debug_raise():
+async def debug_raise(kind: str = "runtime"):
     """Error-reporting smoke test (needs the API key like every other route): raises so the
-    catch-all handler reports a tagged fault to Honeybadger. Harmless, and it never touches the DB."""
-    raise RuntimeError("Honeybadger smoke test from /debug/raise")
+    catch-all handler reports a tagged fault to Honeybadger. `kind` picks the exception class so a
+    fresh fault (and GitHub issue) can be produced on demand. Harmless; never touches the DB."""
+    raise SMOKE_ERRORS.get(kind, RuntimeError)(f"Honeybadger smoke test ({kind}) from /debug/raise")
 
 
 @app.get("/health")
