@@ -29,7 +29,7 @@ flowchart LR
 
 | Component | Location | Role |
 |---|---|---|
-| Pipeline | `pipeline/` | Dagster project (`cityrecords`): assets, schedule, failure sensor, Alembic migrations |
+| Pipeline | `pipeline/` | Dagster project (`cityrecords`): `defs/` holds assets, automation and resources and is autoloaded by `definitions.py`; pure helpers (`enrich.py`, `text.py`, `vendors_util.py`) sit beside it; Alembic migrations |
 | API | `api/` | FastAPI REST plus FastMCP server in one process, read-only against Postgres |
 | Web | `web/` | Vite + React (JavaScript) + Tailwind + Recharts; `web/api/proxy.js` is the Vercel proxy |
 | Infra | `infra/` | Cluster/secret/deploy scripts, Dagster Helm values, API manifests (`infra/k8s`) |
@@ -89,7 +89,7 @@ pnpm dev                                     # http://localhost:5173, /api proxi
 VITE_USE_MOCK=1 pnpm dev                     # built-in mock data, no API needed
 ```
 
-`pipeline/src/cityrecords/definitions.py` loads the repo-root `.env` automatically in development. `DAGSTER_HOME=$PWD` makes Dagster read `pipeline/dagster.yaml`, which stores run metadata in Postgres. In dev the web app calls `/api/*` through the Vite proxy; if `VITE_API_KEY` is set it is sent as `x-api-key` (the value is visible in the browser, so use it only locally).
+`pipeline/src/cityrecords/definitions.py` loads the repo-root `.env` automatically in development and autoloads everything under `cityrecords/defs/` (the `dg scaffold` layout). `uv run dg check defs` validates the code location and runs in CI before the tests; `tests/test_definitions.py` asserts the expected assets, job, schedule, sensor and resource bindings. The `Postgres` resource owns the SQLAlchemy engine for the run (`setup_for_execution`/`teardown_after_execution`) and assets borrow `db.connection()` or `db.transaction()`; they never see the engine. `DAGSTER_HOME=$PWD` makes Dagster read `pipeline/dagster.yaml`, which stores run metadata in Postgres. In dev the web app calls `/api/*` through the Vite proxy; if `VITE_API_KEY` is set it is sent as `x-api-key` (the value is visible in the browser, so use it only locally).
 
 Tests:
 
