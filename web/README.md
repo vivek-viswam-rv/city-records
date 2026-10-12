@@ -15,6 +15,15 @@ pnpm build               # output in dist/
 Dev server proxies `/api/*` to `http://localhost:8000` (prefix stripped).
 With `VITE_USE_MOCK=1` the app uses `src/lib/mock.js` and makes no network calls.
 
+## Structure
+
+- `src/apis/` - axios setup (`axios.js`, `registerIntercepts()` called in `main.jsx`) and one file per resource (`notices`, `vendors`, `stats`, `filters`) exporting a `<resource>Api` object. Mock mode resolves to `{ data }` so hooks work unchanged.
+- `src/hooks/reactQuery/` - react-query hooks (`useFetchNotices`, `useShowNotice`, `useShowVendor`, `useFetchStats`, `useFetchFilters`) that `select` `response.data`.
+- `src/constants/query.js` - `QUERY_KEYS` used for every query key.
+- `src/utils/queryClient.js` - shared QueryClient and defaults; `src/utils/index.js` - small helpers such as `isPresent`.
+- `src/hooks/useDebouncedValue.js` - lodash-based debounce hook (300ms default) used by the search inputs.
+- Import via aliases (`apis`, `hooks`, `components`, `utils`, `constants`, `lib`), configured in `vite.config.js` and `jsconfig.json`.
+
 ## Environment variables
 
 | Var | Purpose |
