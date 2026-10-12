@@ -132,7 +132,7 @@ def stats(from_date: date | None = None, to_date: date | None = None) -> dict:
     and_ = (w + " and ") if w else " where "
     head = _rows(
         "select count(*) as notices, "
-        "count(*) filter (where n.notice_type='Solicitation' and (n.end_date is null or n.end_date >= current_date)) as open_solicitations, "
+        "count(*) filter (where n.notice_type='Solicitation' and n.published_on >= current_date - interval '30 days') as open_solicitations, "
         "coalesce(sum(n.contract_amount) filter (where n.notice_type='Award'),0) as awarded_usd, "
         "count(distinct n.vendor_id) as vendors from cr.notices n" + w, p)[0]
     by_week = _rows(

@@ -30,7 +30,7 @@ export default function StatsStrip({ range }) {
     <section aria-label="Summary" className="space-y-3">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile label="Notices" value={s ? fmtInt(s.notices) : '…'} />
-        <Tile label="Open solicitations" value={s ? fmtInt(s.open_solicitations) : '…'} />
+        <Tile label="Solicitations, last 30 days" value={s ? fmtInt(s.open_solicitations) : '…'} />
         <Tile label="Awarded" value={s ? fmtUsd(s.awarded_usd) : '…'} />
         <Tile label="Vendors" value={s ? fmtInt(s.vendors) : '…'} />
       </div>
