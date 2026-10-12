@@ -34,7 +34,7 @@ dagsterDaemon:
     type: QueuedRunCoordinator
     config:
       queuedRunCoordinator:
-        maxConcurrentRuns: 2
+        maxConcurrentRuns: 4
 
 # Runs launch as k8s Jobs (DefaultRunLauncher is not offered by the chart).
 # NOTE: the chart exposes no resources key here; Autopilot applies its default
