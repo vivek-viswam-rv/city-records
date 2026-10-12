@@ -11,7 +11,7 @@ import App from './App.jsx'
 if (import.meta.env.VITE_HONEYBADGER_API_KEY) {
   Honeybadger.configure({
     apiKey: import.meta.env.VITE_HONEYBADGER_API_KEY,
-    environment: import.meta.env.MODE,
+    environment: 'frontend', // Honeybadger environments are used per component, not per stage
     // Every browser error is tagged so Honeybadger's GitHub integration can label the issue.
     tags: ['frontend', 'bug'],
   })

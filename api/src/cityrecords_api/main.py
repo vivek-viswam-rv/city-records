@@ -13,8 +13,8 @@ from .schemas import Filters, Notice, NoticeList, Stats, VendorDetail
 if os.environ.get("HONEYBADGER_API_KEY"):
     from honeybadger import honeybadger
 
-    honeybadger.configure(api_key=os.environ["HONEYBADGER_API_KEY"],
-                          environment=os.environ.get("ENVIRONMENT", "production"))
+    # Honeybadger environments are used per component (frontend / backend / pipeline), not per stage.
+    honeybadger.configure(api_key=os.environ["HONEYBADGER_API_KEY"], environment="backend")
 else:
     honeybadger = None
 

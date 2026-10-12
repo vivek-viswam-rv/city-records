@@ -38,4 +38,4 @@ blocks:
             - kubectl apply -k infra/k8s
             - kubectl -n app set image deployment/api "api=$REGISTRY/api:$TAG"
             - kubectl -n app rollout status deployment/api --timeout=5m
-            - 'curl -s -X POST https://api.honeybadger.io/v1/deploys -H "X-API-Key: $HONEYBADGER_API_KEY" -d "deploy[environment]=production" -d "deploy[revision]=$TAG" -d "deploy[repository]=https://github.com/vivek-viswam-rv/city-records" -d "deploy[local_username]=semaphore"'
+            - 'for env in backend pipeline; do curl -s -X POST https://api.honeybadger.io/v1/deploys -H "X-API-Key: $HONEYBADGER_API_KEY" -d "deploy[environment]=$env" -d "deploy[revision]=$TAG" -d "deploy[repository]=https://github.com/vivek-viswam-rv/city-records" -d "deploy[local_username]=semaphore"; done'

@@ -37,7 +37,8 @@ def run_failure_sensor(context: dg.RunFailureSensorContext):
     if api_key:
         from honeybadger import honeybadger
 
-        honeybadger.configure(api_key=api_key, environment=os.getenv("APP_ENV", "production"))
+        # Honeybadger environments are used per component (frontend / backend / pipeline), not per stage.
+        honeybadger.configure(api_key=api_key, environment="pipeline")
         honeybadger.notify(error_class="DagsterRunFailure", error_message=msg, context=ctx, tags=FAILURE_TAGS,
                            fingerprint=f"{run.job_name}:{ctx['partition']}")
     else:
