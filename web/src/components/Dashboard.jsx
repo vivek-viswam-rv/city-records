@@ -1,22 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useFetchFilters } from 'hooks/reactQuery/useFiltersApi'
 import { useFetchNotices } from 'hooks/reactQuery/useNoticesApi'
+import useDebouncedValue from 'hooks/useDebouncedValue'
 import { fmtDate, fmtUsd, todayIso } from 'lib/format'
 import StatsStrip from './StatsStrip.jsx'
 import NoticeDetail from './NoticeDetail.jsx'
 import { ConfDot, TypeBadge, card, input } from './ui.jsx'
 
 const PAGE = 25
-
-function useDebounced(value, ms = 300) {
-  const [v, setV] = useState(value)
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms)
-    return () => clearTimeout(t)
-  }, [value, ms])
-  return v
-}
 
 function Select({ label, value, onChange, options }) {
   return (
@@ -37,8 +29,8 @@ export default function Dashboard() {
   const [selected, setSelected] = useState(null)
 
   const set = (k) => (v) => { setF((p) => ({ ...p, [k]: v })); setOffset(0) }
-  const debQ = useDebounced(f.q)
-  const debMin = useDebounced(f.min_amount)
+  const debQ = useDebouncedValue(f.q)
+  const debMin = useDebouncedValue(f.min_amount)
   const params = useMemo(
     () => ({ ...f, q: debQ, min_amount: debMin, ...range, limit: PAGE, offset }),
     [f, debQ, debMin, range, offset],
