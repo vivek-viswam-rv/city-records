@@ -31,7 +31,7 @@ flowchart LR
 |---|---|---|
 | Pipeline | `pipeline/` | Dagster project (`cityrecords`): assets, schedule, failure sensor, Alembic migrations |
 | API | `api/` | FastAPI REST plus FastMCP server in one process, read-only against Postgres |
-| Web | `web/` | Vite + React (JavaScript) + Tailwind + Recharts; `web/api/[...path].js` is the Vercel proxy |
+| Web | `web/` | Vite + React (JavaScript) + Tailwind + Recharts; `web/api/proxy.js` is the Vercel proxy |
 | Infra | `infra/` | Cluster/secret/deploy scripts, Dagster Helm values, API manifests (`infra/k8s`) |
 | Postgres | Supabase | App tables in schema `cr`, Dagster metadata in `public` |
 | S3 | AWS | Raw per-day Socrata JSON (`notices/<date>.json`) |
@@ -44,10 +44,10 @@ flowchart LR
 Partitions are daily, starting 2026-09-01. Job `daily_job` materializes the three assets of one partition in order:
 
 1. `raw_notices`: queries Socrata for notices whose `start_date` falls on the partition day, restricted to the sections Procurement, Public Comment on Contract Awards, Contract Award Hearings, and Public Hearings and Meetings (paged, 5000 rows per request). Writes the untouched rows to S3 at `notices/<date>.json`, strips HTML from the description, computes `content_sha256` over title + description, and upserts into `cr.notices` on `request_id`. Metadata: `rows`, `new`, `changed`, `s3_key`.
-2. `enriched_notices`: selects the day's notices that have no enrichment, or whose enrichment has a different `content_sha256` or `prompt_version`. Calls Bedrock (4 worker threads) with title, description and a few structured fields. The Converse response of this reasoning model has a reasoning block first; the code takes the first block with a `text` key. The JSON is validated with Pydantic (`Enrichment`); an invalid reply gets one corrective retry with a larger token budget. Results are upserted into `cr.enrichments`. Langfuse traces every call (enabled when its keys are set). Metadata: `calls`, `mean_confidence`, `failed`. Individual failures are logged and skipped; the asset raises only if every call failed.
+2. `enriched_notices`: selects the day's notices that have no enrichment, or whose enrichment has a different `content_sha256` or `prompt_version`. Calls Bedrock (4 worker threads) with title, description and a few structured fields. The Converse response of this reasoning model has a reasoning block first; the code takes the first block with a `text` key. The JSON is validated with Pydantic (`Enrichment`); two systematic gpt-oss quirks (a stray quote after a bare number, a trailing comma) are repaired before validation, and an invalid reply gets one corrective retry with a larger token budget. Calls request `reasoning_effort: low`, because at the default effort the model sometimes spent the whole budget thinking and never emitted the JSON. Results are upserted into `cr.enrichments`. Langfuse traces every call (enabled when its keys are set). Metadata: `calls`, `failed`, `mean_confidence`, `notices`, `unenriched`. Individual failures are logged and skipped; the asset raises only if every call failed. The asset check `enrichment_coverage` fails when more than 5% of the day's notices are left without an enrichment, so partial failures are visible rather than hidden behind a green run. Run config `only_missing: true` restricts a run to notices with no enrichment row, which is how gaps are backfilled without re-enriching whole days.
 3. `vendors`: normalizes `vendor_name_raw` (lowercase, punctuation and suffixes such as inc/llc/corp removed), matches against known vendors with rapidfuzz `token_set_ratio` at threshold 92, inserts new vendors, and sets `cr.notices.vendor_id`. Metadata: `new`, `matched`.
 
-Idempotency: re-running a partition is safe. Notices are upserted by `request_id`; enrichment is skipped when the content hash and prompt version are unchanged (so a rerun costs no LLM calls); vendors only touches notices without a `vendor_id`. The prompt version (`PROMPT_VERSION = "v1"`) is also the Dagster `code_version` of `enriched_notices`, so bumping it marks the asset as stale in the UI and makes the next run re-enrich everything.
+Idempotency: re-running a partition is safe. Notices are upserted by `request_id`; enrichment is skipped when the content hash and prompt version are unchanged (so a rerun costs no LLM calls); vendors only touches notices without a `vendor_id`. The prompt version (`PROMPT_VERSION = "v2"`) is also the Dagster `code_version` of `enriched_notices`, so bumping it marks the asset as stale in the UI and makes the next run re-enrich everything.
 
 ## Data model
 
@@ -122,7 +122,7 @@ kubectl -n dagster port-forward svc/dagster-dagster-webserver 3000:80   # Dagste
 kubectl -n app logs deploy/api
 ```
 
-Frontend (Vercel project with root directory `web`, framework Vite, build `pnpm build`, output `dist`): `web/vercel.json` rewrites everything except `/api/*` to `index.html`; `/api/*` is served by the serverless function `web/api/[...path].js`, which forwards to `API_HOST` and adds the `x-api-key` header server-side. Set `API_HOST` and `API_KEY` as Vercel environment variables, and leave `VITE_USE_MOCK` and `VITE_API_KEY` unset in production.
+Frontend (Vercel project with root directory `web`, framework Vite, build `pnpm build`, output `dist`): `web/vercel.json` rewrites everything except `/api/*` to `index.html`; `/api/*` is rewritten to the serverless function `web/api/proxy.js` (an explicit rewrite, because a filesystem catch-all only matched single-segment paths in production), which forwards to `API_HOST` and adds the `x-api-key` header server-side. Set `API_HOST` and `API_KEY` as Vercel environment variables, and leave `VITE_USE_MOCK` and `VITE_API_KEY` unset in production.
 
 Connect Claude Code to the MCP server:
 
@@ -174,7 +174,7 @@ Unhandled exceptions are reported to Honeybadger and return a generic 500.
 - Retries: `enriched_notices` has a `RetryPolicy` of 3 retries with exponential backoff starting at 15 seconds (the asset raises if every Bedrock call in a run failed). Bedrock calls also use botocore retries (3 attempts). Other assets are not retried by policy.
 - Failures: `run_failure_sensor` fires when a run fails, which is after asset retries are exhausted, and sends a `DagsterRunFailure` to Honeybadger with job, run id, partition and a Dagster URL (set `DAGSTER_URL` to make the link useful). Without `HONEYBADGER_API_KEY` it only logs.
 - Cost controls: a small model (20B), input limited to the notice's title, description and a handful of structured fields (description truncated at 6000 characters), `max_tokens` of 600 on the first attempt, enrichment skipped when the content hash and prompt version are unchanged, and tokens and cost per call visible in Langfuse.
-- What to look at: Dagster UI for runs, partition status and per-asset metadata (`new`, `changed`, `mean_confidence`, `failed`); Langfuse for LLM traces; Honeybadger for failures and API/browser errors; GKE logging for pod logs.
+- What to look at: Dagster UI for runs, partition status and per-asset metadata (`new`, `changed`, `mean_confidence`, `failed`, `unenriched`) and the `enrichment_coverage` check; Langfuse for LLM traces; Honeybadger for failures and API/browser errors; GKE logging for pod logs.
 - Gone and stale: nothing is deleted. If a notice disappears from the source it simply stops being updated and remains in `cr.notices`; there is no tombstone yet. A solicitation is treated as no longer open when its `end_date` is in the past (see `open_solicitations` in `/stats`). An enrichment is stale when its `content_sha256` differs from the notice or its `prompt_version` differs from the current one; the next run for that partition (or a backfill) refreshes it. Dagster marks `enriched_notices` stale in the UI when `PROMPT_VERSION` changes.
 
 ## Design decisions and tradeoffs

@@ -41,7 +41,7 @@ Also replace `GITHUB_PLACEHOLDER` in `src/components/Footer.jsx`.
 
 ## API proxy on Vercel
 
-`api/[...path].js` is a Vercel serverless function that forwards `/api/*` to the
+`api/proxy.js` is a Vercel serverless function (reached via the `/api/(.*)` rewrite in `vercel.json`) that forwards `/api/*` to the
 FastAPI service and adds the `x-api-key` header from server-side env vars, so the
 key is never shipped to the browser. Set these in the Vercel project:
 
