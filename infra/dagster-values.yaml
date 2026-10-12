@@ -56,7 +56,7 @@ dagster-user-deployments:
         repository: us-east1-docker.pkg.dev/city-records-511405/city-records/pipeline
         tag: latest # overridden by deploy.sh via --set
         pullPolicy: Always
-      # Module path: pipeline/src/cityrecords/definitions.py -> cityrecords.definitions
+      # Module path: pipeline/src/cityrecords/definitions.py (autoloads cityrecords/defs/) -> cityrecords.definitions
       dagsterApiGrpcArgs:
         - "-m"
         - "cityrecords.definitions"

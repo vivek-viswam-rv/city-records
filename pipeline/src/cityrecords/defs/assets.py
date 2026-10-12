@@ -5,10 +5,10 @@ from concurrent.futures import ThreadPoolExecutor
 import dagster as dg
 from sqlalchemy import text
 
-from . import enrich as enrich_mod
+from .. import enrich as enrich_mod
 from .resources import Bedrock, ObjectStore, Postgres, Socrata
-from .text import normalize_vendor, row_to_notice
-from .vendors_util import match_vendor
+from ..text import normalize_vendor, row_to_notice
+from ..vendors_util import match_vendor
 
 daily_partitions = dg.DailyPartitionsDefinition(start_date="2026-09-01")
 GROUP = "cityrecord"

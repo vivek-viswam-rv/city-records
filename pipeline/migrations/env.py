@@ -10,7 +10,7 @@ for p in Path(__file__).resolve().parents:
         load_dotenv(p / ".env")
         break
 
-from cityrecords.resources import to_sqlalchemy_url  # noqa: E402
+from cityrecords.defs.resources import to_sqlalchemy_url  # noqa: E402
 
 config = context.config
 url = to_sqlalchemy_url(os.environ["DATABASE_URL"])

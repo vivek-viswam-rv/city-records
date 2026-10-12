@@ -111,3 +111,13 @@ class Socrata(dg.ConfigurableResource):
             if len(page) < self.page_size:
                 return rows
             offset += self.page_size
+
+
+@dg.definitions
+def resources() -> dg.Definitions:
+    return dg.Definitions(resources={
+        "db": Postgres(database_url=dg.EnvVar("DATABASE_URL")),
+        "store": ObjectStore(bucket=dg.EnvVar("S3_BUCKET"), region=dg.EnvVar("AWS_REGION")),
+        "bedrock": Bedrock(region=dg.EnvVar("AWS_REGION"), model_id=dg.EnvVar("BEDROCK_MODEL_ID")),
+        "socrata": Socrata(app_token=dg.EnvVar("SOCRATA_APP_TOKEN")),
+    })
