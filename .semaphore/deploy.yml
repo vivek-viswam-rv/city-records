@@ -1,0 +1,41 @@
+version: v1.0
+name: Deploy to GKE
+agent:
+  machine:
+    type: e2-standard-2
+    os_image: ubuntu2204
+
+blocks:
+  - name: Build and deploy
+    task:
+      secrets:
+        - name: city-records-gcp      # GCP_SA_KEY (base64 service-account JSON), GCP_PROJECT_ID, GCP_REGION
+        - name: city-records-app      # the .env values (see .env.example)
+      env_vars:
+        - name: REGISTRY
+          value: us-east1-docker.pkg.dev/city-records-511405/city-records
+        - name: CLUSTER
+          value: city-records
+      jobs:
+        - name: Images, Helm, kubectl
+          commands:
+            - checkout
+            - echo "$GCP_SA_KEY" | base64 -d > /tmp/sa.json
+            - gcloud auth activate-service-account --key-file /tmp/sa.json
+            - gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
+            - gcloud components install gke-gcloud-auth-plugin --quiet || sudo apt-get install -y google-cloud-cli-gke-gcloud-auth-plugin
+            - command -v helm >/dev/null || curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+            - gcloud container clusters get-credentials "$CLUSTER" --region "$GCP_REGION" --project "$GCP_PROJECT_ID"
+            - export TAG="$SEMAPHORE_GIT_SHA"
+            - docker build -t "$REGISTRY/pipeline:$TAG" -t "$REGISTRY/pipeline:latest" pipeline/
+            - docker build -f api/Dockerfile -t "$REGISTRY/api:$TAG" -t "$REGISTRY/api:latest" .
+            - docker push --all-tags "$REGISTRY/pipeline"
+            - docker push --all-tags "$REGISTRY/api"
+            - env | grep -E '^(AWS_|S3_BUCKET|BEDROCK_|DATABASE_|HONEYBADGER_|LANGFUSE_|API_KEY|SOCRATA_)' > .env
+            - bash infra/secrets.sh
+            - helm repo add dagster https://dagster-io.github.io/helm && helm repo update
+            - helm upgrade --install dagster dagster/dagster -n dagster --create-namespace -f infra/dagster-values.yaml --set "dagster-user-deployments.deployments[0].image.tag=$TAG" --wait --timeout 10m
+            - kubectl apply -k infra/k8s
+            - kubectl -n app set image deployment/api "api=$REGISTRY/api:$TAG"
+            - kubectl -n app rollout status deployment/api --timeout=5m
+            - 'curl -s -X POST https://api.honeybadger.io/v1/deploys -H "X-API-Key: $HONEYBADGER_API_KEY" -d "deploy[environment]=production" -d "deploy[revision]=$TAG" -d "deploy[repository]=https://github.com/vivek-viswam-rv/city-records" -d "deploy[local_username]=semaphore"'

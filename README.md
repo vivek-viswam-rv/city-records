@@ -189,7 +189,7 @@ Unhandled exceptions are reported to Honeybadger and return a generic 500.
 ## Not done yet
 
 - Golden-set evaluation of the enrichment and a CI gate on it, so prompt or model changes are measured before shipping.
-- CI/CD: a `.semaphore/semaphore.yml` will run tests, build images and deploy; it is added last and does not exist yet.
+- CI/CD: `.semaphore/semaphore.yml` runs three parallel blocks on every push (pipeline: `dg check defs` + pytest; API: unit pytest; web: lint + build) with uv and pnpm caches. Deploy is a manual promotion to `.semaphore/deploy.yml`, which builds and pushes both images, applies secrets, upgrades the Dagster Helm release and rolls the API; it needs the Semaphore secrets `city-records-gcp` and `city-records-app`.
 - Ingress with a Google-managed certificate for the API (HTTPS for MCP clients).
 - Workload Identity Federation for AWS instead of a static key.
 - A second source: agency solicitation pages, which are not in the City Record.
