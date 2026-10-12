@@ -1,0 +1,25 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+.dagster_home/
+.data/
+
+# node
+node_modules/
+web/dist/
+.vercel/
+
+# misc
+.DS_Store
+*.log
+infra/*.json
