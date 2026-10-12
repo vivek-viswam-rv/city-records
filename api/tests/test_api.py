@@ -101,3 +101,14 @@ def test_unhandled_errors_are_reported_with_backend_tags(client, monkeypatch):
     assert len(calls) == 1
     exc, kw = calls[0]
     assert isinstance(exc, RuntimeError) and kw["tags"] == ["backend", "bug"] and kw["context"]["path"] == "/stats"
+
+
+def test_debug_raise_requires_key_and_reports(monkeypatch):
+    from cityrecords_api import main
+
+    calls = []
+    monkeypatch.setattr(main, "honeybadger", type("HB", (), {"notify": lambda self, exc, **kw: calls.append(kw)})())
+    c = TestClient(app, raise_server_exceptions=False)
+    assert c.get("/debug/raise").status_code == 401
+    assert c.get("/debug/raise", headers=H).status_code == 500
+    assert calls[0]["tags"] == ["backend", "bug"] and calls[0]["context"]["path"] == "/debug/raise"

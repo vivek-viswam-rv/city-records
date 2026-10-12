@@ -32,6 +32,13 @@ async def _catch_all(request: Request, exc: Exception):
     return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
 
 
+@app.get("/debug/raise", include_in_schema=False)
+async def debug_raise():
+    """Error-reporting smoke test (needs the API key like every other route): raises so the
+    catch-all handler reports a tagged fault to Honeybadger. Harmless, and it never touches the DB."""
+    raise RuntimeError("Honeybadger smoke test from /debug/raise")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "db": db.db_ok()}

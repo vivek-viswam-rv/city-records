@@ -15,6 +15,8 @@ if (import.meta.env.VITE_HONEYBADGER_API_KEY) {
     // Every browser error is tagged so Honeybadger's GitHub integration can label the issue.
     tags: ['frontend', 'bug'],
   })
+  // Console handle for smoke tests: Honeybadger.notify(new Error('frontend smoke test'))
+  window.Honeybadger = Honeybadger
 }
 
 registerIntercepts()
