@@ -1,4 +1,5 @@
 
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 
 import dagster as dg
@@ -54,19 +55,37 @@ def raw_notices(context: dg.AssetExecutionContext, socrata: Socrata, store: Obje
     return dg.MaterializeResult(metadata={"rows": len(rows), "new": new, "changed": changed, "s3_key": key})
 
 
+class EnrichConfig(dg.Config):
+    """only_missing=True enriches just the notices that have no row yet, skipping rows whose content or
+    prompt version changed. Used to backfill gaps without paying to re-enrich a whole day."""
+
+    only_missing: bool = False
+
+
+MAX_UNENRICHED_RATIO = 0.05
+
+
 @dg.asset(
     deps=[raw_notices], partitions_def=daily_partitions, group_name=GROUP, kinds={"python", "postgres"},
     retry_policy=dg.RetryPolicy(max_retries=3, delay=15, backoff=dg.Backoff.EXPONENTIAL),
     code_version=enrich_mod.PROMPT_VERSION,
+    check_specs=[dg.AssetCheckSpec(
+        name="enrichment_coverage", asset="enriched_notices",
+        description=f"At most {MAX_UNENRICHED_RATIO:.0%} of the day's notices may be left without an enrichment.",
+    )],
     description="LLM (Bedrock) enrichment of notices: what is bought, category, software flag, summary.",
 )
-def enriched_notices(context: dg.AssetExecutionContext, bedrock: Bedrock, db: Postgres) -> dg.MaterializeResult:
+def enriched_notices(
+    context: dg.AssetExecutionContext, config: EnrichConfig, bedrock: Bedrock, db: Postgres,
+) -> Iterator[dg.MaterializeResult | dg.AssetCheckResult]:
+    stale = "e.request_id is null" if config.only_missing else (
+        "e.request_id is null or e.content_sha256 <> n.content_sha256 or e.prompt_version <> :pv")
     engine = db.engine()
     with engine.connect() as conn:
         todo = [dict(r._mapping) for r in conn.execute(text(
             "select n.* from cr.notices n left join cr.enrichments e using (request_id) "
-            "where n.published_on = :d and (e.request_id is null or e.content_sha256 <> n.content_sha256 "
-            "or e.prompt_version <> :pv)"), {"d": context.partition_key, "pv": enrich_mod.PROMPT_VERSION})]
+            f"where n.published_on = :d and ({stale})"),
+            {"d": context.partition_key, "pv": enrich_mod.PROMPT_VERSION})]
     client = bedrock.client()
     results, failed = [], 0
 
@@ -102,7 +121,19 @@ def enriched_notices(context: dg.AssetExecutionContext, bedrock: Bedrock, db: Po
     mean = sum(r["confidence"] for r in results) / len(results) if results else 0.0
     if todo and failed == len(todo):
         raise dg.Failure(f"all {failed} enrichment calls failed")  # triggers retry policy
-    return dg.MaterializeResult(metadata={"calls": len(todo), "mean_confidence": round(mean, 4), "failed": failed})
+    with engine.connect() as conn:
+        total, unenriched = conn.execute(text(
+            "select count(*), count(*) filter (where e.request_id is null) from cr.notices n "
+            "left join cr.enrichments e using (request_id) where n.published_on = :d"), {"d": context.partition_key}).one()
+    ratio = unenriched / total if total else 0.0
+    yield dg.MaterializeResult(metadata={
+        "calls": len(todo), "failed": failed, "mean_confidence": round(mean, 4),
+        "notices": total, "unenriched": unenriched,
+    })
+    yield dg.AssetCheckResult(
+        passed=ratio <= MAX_UNENRICHED_RATIO,
+        metadata={"notices": total, "unenriched": unenriched, "unenriched_ratio": round(ratio, 4)},
+    )
 
 
 @dg.asset(deps=[enriched_notices], partitions_def=daily_partitions, group_name=GROUP, kinds={"python", "postgres"},
