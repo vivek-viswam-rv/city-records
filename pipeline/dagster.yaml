@@ -1,0 +1,5 @@
+# Dagster instance config. Use with: export DAGSTER_HOME=$PWD
+storage:
+  postgres:
+    postgres_url:
+      env: DATABASE_URL
