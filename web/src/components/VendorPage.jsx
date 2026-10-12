@@ -1,11 +1,11 @@
 import { Link, useParams } from 'react-router-dom'
-import { useVendor } from '../lib/api.js'
-import { fmtDate, fmtUsdFull } from '../lib/format.js'
+import { useShowVendor } from 'hooks/reactQuery/useVendorsApi'
+import { fmtDate, fmtUsdFull } from 'lib/format'
 import { TypeBadge, card } from './ui.jsx'
 
 export default function VendorPage() {
   const { id } = useParams()
-  const { data, isLoading, error } = useVendor(id)
+  const { data, isLoading, error } = useShowVendor(id)
   return (
     <main className="mx-auto max-w-7xl px-4 py-6">
       <Link to="/" className="text-sm text-blue-600 underline dark:text-blue-400">← All notices</Link>

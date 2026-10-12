@@ -1,5 +1,5 @@
-import { useNotice } from '../lib/api.js'
-import { confColor, fmtDate, fmtUsdFull, sourceUrl } from '../lib/format.js'
+import { useShowNotice } from 'hooks/reactQuery/useNoticesApi'
+import { confColor, fmtDate, fmtUsdFull, sourceUrl } from 'lib/format'
 import { Link } from 'react-router-dom'
 import { Chip, TypeBadge } from './ui.jsx'
 
@@ -14,7 +14,7 @@ function Row({ label, children }) {
 }
 
 export default function NoticeDetail({ id, initial, onClose }) {
-  const { data } = useNotice(id)
+  const { data } = useShowNotice(id)
   const n = data || initial
   const e = n?.enrichment
   return (

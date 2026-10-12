@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useFilters, useNotices } from '../lib/api.js'
-import { fmtDate, fmtUsd, todayIso } from '../lib/format.js'
+import { useFetchFilters } from 'hooks/reactQuery/useFiltersApi'
+import { useFetchNotices } from 'hooks/reactQuery/useNoticesApi'
+import { fmtDate, fmtUsd, todayIso } from 'lib/format'
 import StatsStrip from './StatsStrip.jsx'
 import NoticeDetail from './NoticeDetail.jsx'
 import { ConfDot, TypeBadge, card, input } from './ui.jsx'
@@ -42,8 +43,8 @@ export default function Dashboard() {
     () => ({ ...f, q: debQ, min_amount: debMin, ...range, limit: PAGE, offset }),
     [f, debQ, debMin, range, offset],
   )
-  const filters = useFilters()
-  const { data, isLoading, error, isFetching } = useNotices(params)
+  const filters = useFetchFilters()
+  const { data, isLoading, error, isFetching } = useFetchNotices(params)
   const items = data?.items || []
 
   return (

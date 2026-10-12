@@ -1,6 +1,6 @@
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { useStats } from '../lib/api.js'
-import { fmtInt, fmtUsd, TYPE_COLORS } from '../lib/format.js'
+import { useFetchStats } from 'hooks/reactQuery/useStatsApi'
+import { fmtInt, fmtUsd, TYPE_COLORS } from 'lib/format'
 import { card } from './ui.jsx'
 
 function Tile({ label, value }) {
@@ -22,7 +22,7 @@ function pivot(byWeek) {
 }
 
 export default function StatsStrip({ range }) {
-  const { data, isLoading, error } = useStats(range)
+  const { data, isLoading, error } = useFetchStats(range)
   if (error) return <p className="text-sm text-red-600">Could not load stats: {error.message}</p>
   const s = data
   const types = s ? [...new Set(s.by_week.map((w) => w.notice_type))] : []

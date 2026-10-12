@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "apis/*": ["./src/apis/*"],
+      "hooks/*": ["./src/hooks/*"],
+      "components/*": ["./src/components/*"],
+      "utils": ["./src/utils/index.js"],
+      "utils/*": ["./src/utils/*"],
+      "constants/*": ["./src/constants/*"],
+      "lib/*": ["./src/lib/*"]
+    }
+  },
+  "include": ["src"]
+}
