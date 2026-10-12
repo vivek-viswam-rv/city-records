@@ -31,10 +31,19 @@ With `VITE_USE_MOCK=1` the app uses `src/lib/mock.js` and makes no network calls
 - Environment variables: as above (leave `VITE_API_URL` unset to use the `/api` rewrite; set `VITE_API_KEY` if the API requires one)
 
 `vercel.json` proxies `/api/*` to the API and falls back to `index.html` for SPA routes.
-Replace `API_HOST_PLACEHOLDER` in the rewrite destination with the LoadBalancer IP. Vercel rewrites to plain HTTP IPs need the scheme, so use:
+
 
 ```json
 { "source": "/api/:path*", "destination": "http://<ip>/:path*" }
 ```
 
 Also replace `GITHUB_PLACEHOLDER` in `src/components/Footer.jsx`.
+
+## API proxy on Vercel
+
+`api/[...path].js` is a Vercel serverless function that forwards `/api/*` to the
+FastAPI service and adds the `x-api-key` header from server-side env vars, so the
+key is never shipped to the browser. Set these in the Vercel project:
+
+- `API_HOST` – e.g. `http://34.26.80.231` (the GKE LoadBalancer IP)
+- `API_KEY` – the same value as the API's `API_KEY`
