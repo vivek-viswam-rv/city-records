@@ -17,6 +17,7 @@ export default function NoticeDetail({ id, initial, onClose }) {
   const { data } = useShowNotice(id)
   const n = data || initial
   const e = n?.enrichment
+  if (!n) return <p className="p-4 text-sm text-slate-500">Loading…</p>
   return (
     <div className="p-4">
       <div className="mb-3 flex items-center justify-between">

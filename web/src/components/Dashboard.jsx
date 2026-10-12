@@ -2,13 +2,30 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useFetchFilters } from 'hooks/reactQuery/useFiltersApi'
 import { useFetchNotices } from 'hooks/reactQuery/useNoticesApi'
-import useDebouncedValue from 'hooks/useDebouncedValue'
-import { fmtDate, fmtUsd, todayIso } from 'lib/format'
+import useUrlFilters, { useUrlTextInput } from 'hooks/useUrlFilters'
+import { PAGE_SIZE as PAGE } from 'constants/filters'
+import { fmtDate, fmtUsd } from 'lib/format'
 import StatsStrip from './StatsStrip.jsx'
 import NoticeDetail from './NoticeDetail.jsx'
 import { ConfDot, TypeBadge, card, input } from './ui.jsx'
 
-const PAGE = 25
+function CopyLinkButton() {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => {
+    try {
+      await navigator.clipboard?.writeText(window.location.href)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // clipboard unavailable or denied: do nothing
+    }
+  }
+  return (
+    <button type="button" onClick={copy} className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+      {copied ? 'Copied' : 'Copy link'}
+    </button>
+  )
+}
 
 function Select({ label, value, onChange, options }) {
   return (
@@ -23,17 +40,13 @@ function Select({ label, value, onChange, options }) {
 }
 
 export default function Dashboard() {
-  const [range, setRange] = useState({ from: '2026-09-01', to: todayIso() })
-  const [f, setF] = useState({ q: '', agency: '', notice_type: '', product_category: '', is_software: false, min_amount: '' })
-  const [offset, setOffset] = useState(0)
-  const [selected, setSelected] = useState(null)
-
-  const set = (k) => (v) => { setF((p) => ({ ...p, [k]: v })); setOffset(0) }
-  const debQ = useDebouncedValue(f.q)
-  const debMin = useDebouncedValue(f.min_amount)
+  const { filters: f, range, offset, selected, setFilter, setRange, setOffset, setSelected } = useUrlFilters()
+  const set = (k) => (v) => setFilter(k, v)
+  const [qInput, setQInput] = useUrlTextInput(f.q, set('q'))
+  const [minInput, setMinInput] = useUrlTextInput(f.min_amount, set('min_amount'))
   const params = useMemo(
-    () => ({ ...f, q: debQ, min_amount: debMin, ...range, limit: PAGE, offset }),
-    [f, debQ, debMin, range, offset],
+    () => ({ ...f, ...range, limit: PAGE, offset }),
+    [f, range, offset],
   )
   const filters = useFetchFilters()
   const { data, isLoading, error, isFetching } = useFetchNotices(params)
@@ -47,8 +60,8 @@ export default function Dashboard() {
           <p className="text-sm text-slate-500 dark:text-slate-400">NYC procurement notices, read daily by a pipeline and an LLM</p>
         </div>
         <div className="flex items-end gap-2 text-xs text-slate-500 dark:text-slate-400">
-          <label>From<input type="date" className={`${input} mt-1`} value={range.from} max={range.to} onChange={(e) => { setRange({ ...range, from: e.target.value }); setOffset(0) }} /></label>
-          <label>To<input type="date" className={`${input} mt-1`} value={range.to} min={range.from} onChange={(e) => { setRange({ ...range, to: e.target.value }); setOffset(0) }} /></label>
+          <label>From<input type="date" className={`${input} mt-1`} value={range.from} max={range.to} onChange={(e) => setRange({ from: e.target.value })} /></label>
+          <label>To<input type="date" className={`${input} mt-1`} value={range.to} min={range.from} onChange={(e) => setRange({ to: e.target.value })} /></label>
         </div>
       </header>
 
@@ -57,17 +70,18 @@ export default function Dashboard() {
       <section aria-label="Search" className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         <label className="block text-xs text-slate-500 dark:text-slate-400 sm:col-span-2">
           Search
-          <input type="search" className={`${input} mt-1`} placeholder="Title, description, vendor…" value={f.q} onChange={(e) => set('q')(e.target.value)} />
+          <input type="search" className={`${input} mt-1`} placeholder="Title, description, vendor…" value={qInput} onChange={(e) => setQInput(e.target.value)} />
         </label>
         <Select label="Agency" value={f.agency} onChange={set('agency')} options={filters.data?.agencies} />
         <Select label="Notice type" value={f.notice_type} onChange={set('notice_type')} options={filters.data?.notice_types} />
         <Select label="Product category" value={f.product_category} onChange={set('product_category')} options={filters.data?.product_categories} />
         <label className="block text-xs text-slate-500 dark:text-slate-400">
           Min amount ($)
-          <input type="number" min="0" step="1000" className={`${input} mt-1`} value={f.min_amount} onChange={(e) => set('min_amount')(e.target.value)} />
+          <input type="number" min="0" step="1000" className={`${input} mt-1`} value={minInput} onChange={(e) => setMinInput(e.target.value)} />
         </label>
         <label className="flex items-center gap-2 text-sm sm:col-span-2 lg:col-span-6">
           <input type="checkbox" checked={f.is_software} onChange={(e) => set('is_software')(e.target.checked)} /> Software only
+          <span className="ml-auto"><CopyLinkButton /></span>
         </label>
       </section>
 
@@ -85,9 +99,9 @@ export default function Dashboard() {
                 <div
                   role="button"
                   tabIndex={0}
-                  onClick={() => setSelected(n)}
-                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelected(n)}
-                  className={`cursor-pointer px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${selected?.request_id === n.request_id ? 'bg-blue-50 dark:bg-blue-950/40' : ''}`}
+                  onClick={() => setSelected(n.request_id)}
+                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelected(n.request_id)}
+                  className={`cursor-pointer px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${selected === String(n.request_id) ? 'bg-blue-50 dark:bg-blue-950/40' : ''}`}
                 >
                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                     <TypeBadge type={n.notice_type} />
@@ -120,7 +134,7 @@ export default function Dashboard() {
           className={`${selected ? '' : 'hidden lg:block'} fixed inset-x-0 bottom-0 top-12 z-40 overflow-auto rounded-t-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 lg:sticky lg:inset-auto lg:top-4 lg:z-auto lg:max-h-[calc(100vh-2rem)] lg:self-start lg:rounded-xl lg:shadow-none`}
         >
           {selected ? (
-            <NoticeDetail key={selected.request_id} id={selected.request_id} initial={selected} onClose={() => setSelected(null)} />
+            <NoticeDetail key={selected} id={selected} initial={items.find((n) => String(n.request_id) === selected)} onClose={() => setSelected(null)} />
           ) : (
             <p className="p-4 text-sm text-slate-500">Select a notice to see it as published next to the model&apos;s reading.</p>
           )}

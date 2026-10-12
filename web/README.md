@@ -54,3 +54,16 @@ key is never shipped to the browser. Set these in the Vercel project:
 
 - `API_HOST` – e.g. `http://34.26.80.231` (the GKE LoadBalancer IP)
 - `API_KEY` – the same value as the API's `API_KEY`
+
+## Shareable URLs
+
+The dashboard keeps its state in the query string, so a copied link reproduces the view
+(the "Copy link" button copies the current URL). Defaults are omitted. Params:
+
+- `q` search text, `agency`, `type` (notice type), `category` (product category)
+- `software=1` software only, `min` minimum amount
+- `from`, `to` date range (default `2026-09-01` to today)
+- `page` 1-based page number (25 per page)
+- `notice` selected notice id (opens the detail panel)
+
+Example: `/?q=software&type=Award&page=2&notice=20260827014`
