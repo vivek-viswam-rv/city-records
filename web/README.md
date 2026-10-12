@@ -6,18 +6,17 @@ Vite + React 18 + Tailwind v3 dashboard over NYC City Record procurement notices
 
 ```sh
 pnpm install
-cp .env.example .env     # VITE_USE_MOCK=1 works without an API
+cp .env.example .env
 pnpm dev                 # http://localhost:5173
 pnpm lint
 pnpm build               # output in dist/
 ```
 
-Dev server proxies `/api/*` to `http://localhost:8000` (prefix stripped).
-With `VITE_USE_MOCK=1` the app uses `src/lib/mock.js` and makes no network calls.
+Dev server proxies `/api/*` to `http://localhost:8000` (prefix stripped), so run the API first.
 
 ## Structure
 
-- `src/apis/` - axios setup (`axios.js`, `registerIntercepts()` called in `main.jsx`) and one file per resource (`notices`, `vendors`, `stats`, `filters`) exporting a `<resource>Api` object. Mock mode resolves to `{ data }` so hooks work unchanged.
+- `src/apis/` - axios setup (`axios.js`, `registerIntercepts()` called in `main.jsx`) and one file per resource (`notices`, `vendors`, `stats`, `filters`) exporting a `<resource>Api` object.
 - `src/hooks/reactQuery/` - react-query hooks (`useFetchNotices`, `useShowNotice`, `useShowVendor`, `useFetchStats`, `useFetchFilters`) that `select` `response.data`.
 - `src/constants/query.js` - `QUERY_KEYS` used for every query key.
 - `src/utils/queryClient.js` - shared QueryClient and defaults; `src/utils/index.js` - small helpers such as `isPresent`.
@@ -30,7 +29,6 @@ With `VITE_USE_MOCK=1` the app uses `src/lib/mock.js` and makes no network calls
 | --- | --- |
 | `VITE_API_URL` | API base URL, default `/api` |
 | `VITE_API_KEY` | Sent as `x-api-key` if set |
-| `VITE_USE_MOCK` | `1` to use mock data |
 | `VITE_HONEYBADGER_API_KEY` | Enables Honeybadger if set |
 
 ## Deploy on Vercel

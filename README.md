@@ -86,7 +86,6 @@ uv run uvicorn cityrecords_api.main:app --reload     # http://localhost:8000
 cd web
 pnpm install
 pnpm dev                                     # http://localhost:5173, /api proxied to :8000
-VITE_USE_MOCK=1 pnpm dev                     # built-in mock data, no API needed
 ```
 
 `pipeline/src/cityrecords/definitions.py` loads the repo-root `.env` automatically in development and autoloads everything under `cityrecords/defs/` (the `dg scaffold` layout). `uv run dg check defs` validates the code location and runs in CI before the tests; `tests/test_definitions.py` asserts the expected assets, job, schedule, sensor and resource bindings. The `Postgres` resource owns the SQLAlchemy engine for the run (`setup_for_execution`/`teardown_after_execution`) and assets borrow `db.connection()` or `db.transaction()`; they never see the engine. `DAGSTER_HOME=$PWD` makes Dagster read `pipeline/dagster.yaml`, which stores run metadata in Postgres. In dev the web app calls `/api/*` through the Vite proxy; if `VITE_API_KEY` is set it is sent as `x-api-key` (the value is visible in the browser, so use it only locally).
@@ -122,7 +121,7 @@ kubectl -n dagster port-forward svc/dagster-dagster-webserver 3000:80   # Dagste
 kubectl -n app logs deploy/api
 ```
 
-Frontend (Vercel project with root directory `web`, framework Vite, build `pnpm build`, output `dist`): `web/vercel.json` rewrites everything except `/api/*` to `index.html`; `/api/*` is rewritten to the serverless function `web/api/proxy.js` (an explicit rewrite, because a filesystem catch-all only matched single-segment paths in production), which forwards to `API_HOST` and adds the `x-api-key` header server-side. Set `API_HOST` and `API_KEY` as Vercel environment variables, and leave `VITE_USE_MOCK` and `VITE_API_KEY` unset in production.
+Frontend (Vercel project with root directory `web`, framework Vite, build `pnpm build`, output `dist`): `web/vercel.json` rewrites everything except `/api/*` to `index.html`; `/api/*` is rewritten to the serverless function `web/api/proxy.js` (an explicit rewrite, because a filesystem catch-all only matched single-segment paths in production), which forwards to `API_HOST` and adds the `x-api-key` header server-side. Set `API_HOST` and `API_KEY` as Vercel environment variables, and leave `VITE_API_KEY` unset in production.
 
 Connect Claude Code to the MCP server:
 
@@ -147,7 +146,7 @@ Tools: `search_notices`, `get_notice`, `vendor_history`, `stats`.
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | pipeline | LLM tracing (skipped when keys unset) |
 | `API_KEY` | API, Vercel | Shared secret for the `x-api-key` header |
 | `API_HOST` | Vercel | Base URL of the GKE service, e.g. `http://<API_IP>` |
-| `VITE_API_URL`, `VITE_USE_MOCK`, `VITE_HONEYBADGER_API_KEY` | web | See `web/.env.example` |
+| `VITE_API_URL`, `VITE_HONEYBADGER_API_KEY` | web | See `web/.env.example` |
 
 The Supabase direct host is IPv6-only, so both the pipeline and the API connect through the pooler: session mode for Dagster (it needs session features), transaction mode for the API. Transaction mode cannot hold server-side prepared statements, so the API engine sets `prepare_threshold=None`.
 
