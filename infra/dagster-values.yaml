@@ -1,0 +1,68 @@
+# Dagster Helm values for city-records (GKE Autopilot, external Supabase Postgres).
+# Password lives in k8s Secret dagster-postgresql-secret (key postgresql-password), created by infra/secrets.sh.
+global:
+  postgresqlSecretName: dagster-postgresql-secret
+
+postgresql:
+  enabled: false
+  postgresqlHost: aws-0-us-east-1.pooler.supabase.com
+  postgresqlUsername: postgres.rgidityfwdqamapkhkuo
+  postgresqlDatabase: postgres
+  service:
+    port: 5432
+
+generatePostgresqlPasswordSecret: false
+
+ingress:
+  enabled: false
+
+dagsterWebserver:
+  service:
+    type: ClusterIP
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "1", memory: 1Gi}
+
+dagsterDaemon:
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "1", memory: 1Gi}
+  envSecrets:
+    - name: pipeline-env
+  runCoordinator:
+    enabled: true
+    type: QueuedRunCoordinator
+    config:
+      queuedRunCoordinator:
+        maxConcurrentRuns: 2
+
+# Runs launch as k8s Jobs (DefaultRunLauncher is not offered by the chart).
+# NOTE: the chart exposes no resources key here; Autopilot applies its default
+# requests to run pods. Per-job resources can be set via the dagster-k8s/config tag.
+runLauncher:
+  type: K8sRunLauncher
+  config:
+    k8sRunLauncher:
+      imagePullPolicy: Always
+      envSecrets:
+        - name: pipeline-env
+
+dagster-user-deployments:
+  enabled: true
+  enableSubchart: true
+  deployments:
+    - name: pipeline
+      image:
+        repository: us-east1-docker.pkg.dev/city-records-511405/city-records/pipeline
+        tag: latest # overridden by deploy.sh via --set
+        pullPolicy: Always
+      # Module path: pipeline/src/cityrecords/definitions.py -> cityrecords.definitions
+      dagsterApiGrpcArgs:
+        - "-m"
+        - "cityrecords.definitions"
+      port: 3030
+      envSecrets:
+        - name: pipeline-env
+      resources:
+        requests: {cpu: 250m, memory: 512Mi}
+        limits: {cpu: "1", memory: 1Gi}
