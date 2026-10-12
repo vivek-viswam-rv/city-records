@@ -4,11 +4,14 @@ from __future__ import annotations
 import json
 import os
 import re
+from contextlib import contextmanager
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
 PROMPT_VERSION = "v2"
+PROMPT_NAME = "enrich-notice"  # Langfuse prompt-management name; the text below stays the source of truth
+REASONING_EFFORT = "low"
 
 ProductCategory = Literal[
     "software", "it_services", "professional_services", "construction", "facilities",
@@ -90,29 +93,51 @@ def parse_enrichment(text: str) -> Enrichment:
     return Enrichment.model_validate(data)
 
 
+def _usage(resp: dict[str, Any]) -> dict[str, int]:
+    u = resp.get("usage", {})
+    return {k: int(u.get(k, 0)) for k in ("inputTokens", "outputTokens", "totalTokens")}
+
+
 def _call(client: Any, model_id: str, notice: dict[str, Any]) -> tuple[Enrichment, dict[str, int]]:
     messages = [{"role": "user", "content": [{"text": build_user_prompt(notice)}]}]
     usage = {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
     last_err: Exception | None = None
     max_tokens = 600
     for attempt in range(2):
-        resp = client.converse(
-            modelId=model_id,
-            system=[{"text": SYSTEM_PROMPT}],
-            messages=messages,
-            inferenceConfig={"maxTokens": max_tokens, "temperature": 0 if attempt == 0 else 0.3},
-            # gpt-oss is a reasoning model; at default effort it can spend the whole budget thinking and never
-            # emit the answer. Low effort is plenty for a fixed-schema classification task and is cheaper.
-            additionalModelRequestFields={"reasoning_effort": "low"},
-        )
-        for k in usage:
-            usage[k] += int(resp.get("usage", {}).get(k, 0))
-        try:
-            text = extract_text(resp)
-        except (EnrichmentError, KeyError) as e:
-            last_err, text = e, ""
-            max_tokens = 2000  # reasoning model exhausted the 600-token budget before emitting text
-        else:
+        temperature = 0 if attempt == 0 else 0.3
+        params = {"max_tokens": max_tokens, "temperature": temperature, "reasoning_effort": REASONING_EFFORT}
+        with _generation(
+            name="bedrock.converse", model=model_id, model_parameters=params,
+            input=[{"role": "system", "content": SYSTEM_PROMPT}]
+            + [{"role": m["role"], "content": m["content"][0]["text"]} for m in messages],
+            metadata={"attempt": attempt, "prompt_version": PROMPT_VERSION},
+        ) as gen:
+            resp = client.converse(
+                modelId=model_id,
+                system=[{"text": SYSTEM_PROMPT}],
+                messages=messages,
+                inferenceConfig={"maxTokens": max_tokens, "temperature": temperature},
+                # gpt-oss is a reasoning model; at default effort it can spend the whole budget thinking and never
+                # emit the answer. Low effort is plenty for a fixed-schema classification task and is cheaper.
+                additionalModelRequestFields={"reasoning_effort": REASONING_EFFORT},
+            )
+            u = _usage(resp)
+            for k in usage:
+                usage[k] += u[k]
+            try:
+                text = extract_text(resp)
+            except (EnrichmentError, KeyError) as e:
+                last_err, text = e, ""
+                max_tokens = 2000  # reasoning model exhausted the 600-token budget before emitting text
+            if gen is not None:
+                gen.update(
+                    output=text or None,
+                    usage_details={"input": u["inputTokens"], "output": u["outputTokens"], "total": u["totalTokens"]},
+                    metadata={"stop_reason": resp.get("stopReason")},
+                    level="WARNING" if not text else "DEFAULT",
+                    status_message=str(last_err) if not text else None,
+                )
+        if text:
             try:
                 return parse_enrichment(text), usage
             except (ValueError, ValidationError) as e:  # JSONDecodeError is a ValueError
@@ -132,6 +157,22 @@ def _langfuse_enabled() -> bool:
 if _langfuse_enabled():
     from langfuse import get_client, observe, propagate_attributes
 
+    def _prompt_link():
+        """Langfuse prompt object for attribution only. Bedrock always receives SYSTEM_PROMPT from code."""
+        try:
+            return get_client().get_prompt(PROMPT_NAME, label="production", cache_ttl_seconds=300, fallback=SYSTEM_PROMPT)
+        except Exception:  # noqa: BLE001 - tracing must never break enrichment
+            return None
+
+    @contextmanager
+    def _generation(**kwargs: Any):
+        """One Langfuse *generation* per Bedrock call: model, prompt, parameters, usage -> cost in the UI."""
+        prompt = _prompt_link()
+        if prompt is not None and not getattr(prompt, "is_fallback", False):
+            kwargs["prompt"] = prompt
+        with get_client().start_as_current_observation(as_type="generation", **kwargs) as gen:
+            yield gen
+
     @observe(name="enrich_notice")
     def enrich_notice(client: Any, model_id: str, notice: dict[str, Any]) -> tuple[Enrichment, dict[str, int]]:
         meta = {
@@ -141,12 +182,19 @@ if _langfuse_enabled():
         }
         with propagate_attributes(metadata=meta):
             result = _call(client, model_id, notice)
-        get_client().update_current_span(output=result[0].model_dump(), metadata={"usage": result[1], "model": model_id})
+        get_client().update_current_span(
+            input={"request_id": notice["request_id"], "title": notice.get("title")},
+            output=result[0].model_dump(), metadata={"usage": result[1], "model": model_id},
+        )
         return result
 
     def flush() -> None:
         get_client().flush()
 else:
+
+    @contextmanager
+    def _generation(**kwargs: Any):
+        yield None
 
     def enrich_notice(client: Any, model_id: str, notice: dict[str, Any]) -> tuple[Enrichment, dict[str, int]]:
         return _call(client, model_id, notice)

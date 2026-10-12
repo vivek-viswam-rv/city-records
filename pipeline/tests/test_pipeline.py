@@ -102,3 +102,35 @@ def test_requests_low_reasoning_effort():
 def test_empty_description_gets_explicit_placeholder():
     assert "none provided" in enrich.build_user_prompt({"title": "Lead Abatement", "description": ""})
     assert "none provided" not in enrich.build_user_prompt({"title": "t", "description": "Real text"})
+
+
+def test_each_bedrock_call_is_recorded_as_a_generation(monkeypatch):
+    from contextlib import contextmanager
+
+    class Gen:
+        def __init__(self):
+            self.updates = []
+
+        def update(self, **kw):
+            self.updates.append(kw)
+
+    opened, gens = [], []
+
+    @contextmanager
+    def fake_generation(**kwargs):
+        opened.append(kwargs)
+        g = Gen()
+        gens.append(g)
+        yield g
+
+    monkeypatch.setattr(enrich, "_generation", fake_generation)
+    client = FakeBedrock(["not json", GOOD_JSON])
+    enrich.enrich_notice(client, "openai.gpt-oss-20b-1:0", {"request_id": "1", "title": "t"})
+    assert len(opened) == 2 and len(gens) == 2
+    first = opened[0]
+    assert first["model"] == "openai.gpt-oss-20b-1:0"
+    assert first["input"][0] == {"role": "system", "content": enrich.SYSTEM_PROMPT}
+    assert first["model_parameters"] == {"max_tokens": 600, "temperature": 0, "reasoning_effort": "low"}
+    assert gens[0].updates[0]["usage_details"] == {"input": 100, "output": 50, "total": 150}
+    assert gens[0].updates[0]["output"] == "not json"
+    assert opened[1]["metadata"]["attempt"] == 1 and opened[1]["model_parameters"]["temperature"] == 0.3
