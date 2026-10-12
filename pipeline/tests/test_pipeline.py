@@ -85,3 +85,20 @@ def test_no_text_block_retries_with_bigger_budget():
     c = Reasoning([GOOD_JSON])
     enr, _ = enrich.enrich_notice(c, "m", {"request_id": "1"})
     assert enr.is_software and c.calls[1]["inferenceConfig"]["maxTokens"] > 600
+
+
+def test_repairs_stray_quote_after_number_and_trailing_comma():
+    assert enrich.parse_enrichment(GOOD_JSON.replace("0.9}", '0.9"}')).confidence == 0.9
+    assert enrich.parse_enrichment(GOOD_JSON.replace("0.9}", "0.9,}")).confidence == 0.9
+    assert enrich.repair_json('{"a": "x"}') == '{"a": "x"}'  # quotes that close a string are left alone
+
+
+def test_requests_low_reasoning_effort():
+    client = FakeBedrock([GOOD_JSON])
+    enrich.enrich_notice(client, "m", {"request_id": "1"})
+    assert client.calls[0]["additionalModelRequestFields"] == {"reasoning_effort": "low"}
+
+
+def test_empty_description_gets_explicit_placeholder():
+    assert "none provided" in enrich.build_user_prompt({"title": "Lead Abatement", "description": ""})
+    assert "none provided" not in enrich.build_user_prompt({"title": "t", "description": "Real text"})

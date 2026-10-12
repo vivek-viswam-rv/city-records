@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 ProductCategory = Literal[
     "software", "it_services", "professional_services", "construction", "facilities",
@@ -46,7 +46,7 @@ class EnrichmentError(Exception):
 
 
 def build_user_prompt(n: dict[str, Any]) -> str:
-    desc = (n.get("description") or "")[:6000]
+    desc = (n.get("description") or "").strip()[:6000] or "(none provided; infer from the title, agency, category and vendor)"
     return (
         f"Agency: {n.get('agency')}\nSection: {n.get('section')}\nNotice type: {n.get('notice_type')}\n"
         f"Category: {n.get('category')}\nSelection method: {n.get('selection_method')}\n"
@@ -63,6 +63,17 @@ def extract_text(response: dict[str, Any]) -> str:
     raise EnrichmentError("no text block in Bedrock response")
 
 
+def repair_json(t: str) -> str:
+    """Undo the small, systematic mistakes gpt-oss-20b makes with this schema.
+
+    Observed in production: a stray quote after a bare number (`"confidence":0.95"}`) and a trailing comma
+    before the closing brace. Anything else still fails validation and goes through the correction turn.
+    """
+    t = re.sub(r'(\d)"(\s*[,}\]])', r"\1\2", t)
+    t = re.sub(r",(\s*[}\]])", r"\1", t)
+    return t
+
+
 def parse_enrichment(text: str) -> Enrichment:
     t = text.strip()
     m = re.search(r"```(?:json)?\s*(.*?)```", t, re.DOTALL)
@@ -72,7 +83,11 @@ def parse_enrichment(text: str) -> Enrichment:
         s, e = t.find("{"), t.rfind("}")
         if s != -1 and e > s:
             t = t[s : e + 1]
-    return Enrichment.model_validate(json.loads(t))
+    try:
+        data = json.loads(t)
+    except ValueError:
+        data = json.loads(repair_json(t))
+    return Enrichment.model_validate(data)
 
 
 def _call(client: Any, model_id: str, notice: dict[str, Any]) -> tuple[Enrichment, dict[str, int]]:
@@ -86,6 +101,9 @@ def _call(client: Any, model_id: str, notice: dict[str, Any]) -> tuple[Enrichmen
             system=[{"text": SYSTEM_PROMPT}],
             messages=messages,
             inferenceConfig={"maxTokens": max_tokens, "temperature": 0 if attempt == 0 else 0.3},
+            # gpt-oss is a reasoning model; at default effort it can spend the whole budget thinking and never
+            # emit the answer. Low effort is plenty for a fixed-schema classification task and is cheaper.
+            additionalModelRequestFields={"reasoning_effort": "low"},
         )
         for k in usage:
             usage[k] += int(resp.get("usage", {}).get(k, 0))
