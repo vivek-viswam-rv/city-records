@@ -57,6 +57,8 @@ blocks:
             - echo "$GCP_SA_KEY" | base64 -d > /tmp/sa.json
             - gcloud auth activate-service-account --key-file /tmp/sa.json
             - gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
+            - gcloud components install gke-gcloud-auth-plugin --quiet || sudo apt-get install -y google-cloud-cli-gke-gcloud-auth-plugin
+            - command -v helm >/dev/null || curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
             - gcloud container clusters get-credentials "$CLUSTER" --region "$GCP_REGION" --project "$GCP_PROJECT_ID"
             - export TAG="$SEMAPHORE_GIT_SHA"
             - docker build -t "$REGISTRY/pipeline:$TAG" -t "$REGISTRY/pipeline:latest" pipeline/
