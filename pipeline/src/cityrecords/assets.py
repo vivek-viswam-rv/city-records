@@ -39,8 +39,7 @@ def raw_notices(context: dg.AssetExecutionContext, socrata: Socrata, store: Obje
             n["s3_key"] = key
             notices[n["request_id"]] = n
     new = changed = 0
-    engine = db.engine()
-    with engine.begin() as conn:
+    with db.transaction() as conn:
         if notices:
             existing = dict(conn.execute(
                 text("select request_id, content_sha256 from cr.notices where request_id = any(:ids)"),
@@ -80,8 +79,7 @@ def enriched_notices(
 ) -> Iterator[dg.MaterializeResult | dg.AssetCheckResult]:
     stale = "e.request_id is null" if config.only_missing else (
         "e.request_id is null or e.content_sha256 <> n.content_sha256 or e.prompt_version <> :pv")
-    engine = db.engine()
-    with engine.connect() as conn:
+    with db.connection() as conn:
         todo = [dict(r._mapping) for r in conn.execute(text(
             "select n.* from cr.notices n left join cr.enrichments e using (request_id) "
             f"where n.published_on = :d and ({stale})"),
@@ -107,7 +105,7 @@ def enriched_notices(
                 })
     enrich_mod.flush()
     if results:
-        with engine.begin() as conn:
+        with db.transaction() as conn:
             conn.execute(text(
                 "insert into cr.enrichments (request_id, what_is_bought, product_category, is_software, is_renewal, "
                 "summary, keywords, confidence, model, prompt_version, content_sha256, enriched_at) values "
@@ -121,7 +119,7 @@ def enriched_notices(
     mean = sum(r["confidence"] for r in results) / len(results) if results else 0.0
     if todo and failed == len(todo):
         raise dg.Failure(f"all {failed} enrichment calls failed")  # triggers retry policy
-    with engine.connect() as conn:
+    with db.connection() as conn:
         total, unenriched = conn.execute(text(
             "select count(*), count(*) filter (where e.request_id is null) from cr.notices n "
             "left join cr.enrichments e using (request_id) where n.published_on = :d"), {"d": context.partition_key}).one()
@@ -139,9 +137,8 @@ def enriched_notices(
 @dg.asset(deps=[enriched_notices], partitions_def=daily_partitions, group_name=GROUP, kinds={"python", "postgres"},
           description="Canonical vendor table: normalise and fuzzy-match vendor names from the day's notices.")
 def vendors(context: dg.AssetExecutionContext, db: Postgres) -> dg.MaterializeResult:
-    engine = db.engine()
     new = matched = 0
-    with engine.begin() as conn:
+    with db.transaction() as conn:
         known = {r[0]: r[1] for r in conn.execute(text("select normalized_name, id from cr.vendors"))}
         pending = conn.execute(text(
             "select request_id, vendor_name_raw from cr.notices where published_on = :d "

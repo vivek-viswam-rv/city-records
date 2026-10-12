@@ -1,10 +1,13 @@
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import boto3
 import dagster as dg
-from sqlalchemy import Engine, create_engine
+from pydantic import PrivateAttr
+from sqlalchemy import Connection, Engine, create_engine
 
 
 def to_sqlalchemy_url(url: str) -> str:
@@ -23,10 +26,39 @@ SECTIONS = (
 
 
 class Postgres(dg.ConfigurableResource):
-    database_url: str
+    """Owns the SQLAlchemy engine for a run. Assets borrow connections; they never see the engine.
 
-    def engine(self) -> Engine:
-        return create_engine(to_sqlalchemy_url(self.database_url), pool_pre_ping=True)
+    The engine (and its pool) is created once when the run starts and disposed when it ends, so an
+    asset that touches the database three times shares one pool instead of building three.
+    """
+
+    database_url: str
+    _engine: Engine | None = PrivateAttr(default=None)
+
+    def setup_for_execution(self, context: dg.InitResourceContext) -> None:
+        self._engine = create_engine(to_sqlalchemy_url(self.database_url), pool_pre_ping=True)
+
+    def teardown_after_execution(self, context: dg.InitResourceContext) -> None:
+        if self._engine is not None:
+            self._engine.dispose()
+            self._engine = None
+
+    def _get_engine(self) -> Engine:
+        if self._engine is None:  # direct use outside a Dagster run, e.g. scripts
+            self._engine = create_engine(to_sqlalchemy_url(self.database_url), pool_pre_ping=True)
+        return self._engine
+
+    @contextmanager
+    def connection(self) -> Iterator[Connection]:
+        """Read-only work: autocommit-free connection, closed on exit."""
+        with self._get_engine().connect() as conn:
+            yield conn
+
+    @contextmanager
+    def transaction(self) -> Iterator[Connection]:
+        """Writes: one transaction, committed on exit or rolled back on error."""
+        with self._get_engine().begin() as conn:
+            yield conn
 
 
 class ObjectStore(dg.ConfigurableResource):
