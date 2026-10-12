@@ -81,3 +81,23 @@ def test_real_db():
     assert {"items", "total", "has_more"} <= set(q.search_notices(limit=2))
     q.stats()
     q.list_filters()
+
+
+def test_unhandled_errors_are_reported_with_backend_tags(client, monkeypatch):
+    from cityrecords_api import main
+
+    calls = []
+
+    class FakeHB:
+        def notify(self, exc, **kw):
+            calls.append((exc, kw))
+
+    monkeypatch.setattr(main, "honeybadger", FakeHB())
+    monkeypatch.setattr(queries, "stats", lambda f=None, t=None: (_ for _ in ()).throw(RuntimeError("boom")))
+    # The shared client re-raises server exceptions; this one lets the catch-all handler run.
+    # No `with`: the MCP lifespan may only start once per process and /stats does not need it.
+    r = TestClient(app, raise_server_exceptions=False).get("/stats", headers=H)
+    assert r.status_code == 500 and r.json() == {"detail": "Internal Server Error"}
+    assert len(calls) == 1
+    exc, kw = calls[0]
+    assert isinstance(exc, RuntimeError) and kw["tags"] == ["backend", "bug"] and kw["context"]["path"] == "/stats"

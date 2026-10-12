@@ -22,10 +22,13 @@ mcp_app = mcp.http_app(path="/mcp", stateless_http=True)
 app = FastAPI(title="city-records API", lifespan=mcp_app.lifespan)
 
 
+ERROR_TAGS = ["backend", "bug"]  # Honeybadger's GitHub integration turns these into issue labels
+
+
 @app.exception_handler(Exception)
 async def _catch_all(request: Request, exc: Exception):
     if honeybadger:
-        honeybadger.notify(exc, context={"path": request.url.path})
+        honeybadger.notify(exc, context={"path": request.url.path, "method": request.method}, tags=ERROR_TAGS)
     return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
 
 
