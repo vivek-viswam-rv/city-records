@@ -5,10 +5,10 @@ const API_KEY = process.env.API_KEY || ''
 
 export default async function handler(req, res) {
   if (!API_HOST) return res.status(500).json({ error: 'API_HOST is not configured' })
-  const segments = [].concat(req.query.path || [])
+  const segments = [].concat(req.query['...path'] ?? req.query.path ?? [])
   const url = new URL(`${API_HOST}/${segments.join('/')}`)
   for (const [k, v] of Object.entries(req.query)) {
-    if (k === 'path') continue
+    if (k === 'path' || k === '...path' || k === '__debug') continue
     for (const item of [].concat(v)) url.searchParams.append(k, item)
   }
   try {
