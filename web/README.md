@@ -1,0 +1,40 @@
+# City Records web
+
+Vite + React 18 + Tailwind v3 dashboard over NYC City Record procurement notices.
+
+## Run
+
+```sh
+pnpm install
+cp .env.example .env     # VITE_USE_MOCK=1 works without an API
+pnpm dev                 # http://localhost:5173
+pnpm lint
+pnpm build               # output in dist/
+```
+
+Dev server proxies `/api/*` to `http://localhost:8000` (prefix stripped).
+With `VITE_USE_MOCK=1` the app uses `src/lib/mock.js` and makes no network calls.
+
+## Environment variables
+
+| Var | Purpose |
+| --- | --- |
+| `VITE_API_URL` | API base URL, default `/api` |
+| `VITE_API_KEY` | Sent as `x-api-key` if set |
+| `VITE_USE_MOCK` | `1` to use mock data |
+| `VITE_HONEYBADGER_API_KEY` | Enables Honeybadger if set |
+
+## Deploy on Vercel
+
+- Root directory: `web`
+- Framework preset: Vite (build `pnpm build`, output `dist`)
+- Environment variables: as above (leave `VITE_API_URL` unset to use the `/api` rewrite; set `VITE_API_KEY` if the API requires one)
+
+`vercel.json` proxies `/api/*` to the API and falls back to `index.html` for SPA routes.
+Replace `API_HOST_PLACEHOLDER` in the rewrite destination with the LoadBalancer IP. Vercel rewrites to plain HTTP IPs need the scheme, so use:
+
+```json
+{ "source": "/api/:path*", "destination": "http://<ip>/:path*" }
+```
+
+Also replace `GITHUB_PLACEHOLDER` in `src/components/Footer.jsx`.
