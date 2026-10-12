@@ -13,4 +13,4 @@ for _p in Path(__file__).resolve().parents:
 @dg.definitions
 def defs() -> dg.Definitions:
     """Assets, jobs, schedules, sensors and resources are autoloaded from cityrecords/defs/."""
-    return dg.load_from_defs_folder(project_root=Path(__file__).resolve().parents[2])
+    return dg.load_from_defs_folder(path_within_project=Path(__file__))
