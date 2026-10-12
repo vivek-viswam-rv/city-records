@@ -1,14 +1,16 @@
 // Vercel serverless proxy: forwards /api/* to the FastAPI service on GKE and
 // attaches the API key server-side so it never reaches the browser.
+// vercel.json rewrites /api/<anything> here with the remainder in ?path=, because a
+// filesystem catch-all ([...path].js) only matched single-segment paths in production.
 const API_HOST = (process.env.API_HOST || '').replace(/\/$/, '')
 const API_KEY = process.env.API_KEY || ''
 
 export default async function handler(req, res) {
   if (!API_HOST) return res.status(500).json({ error: 'API_HOST is not configured' })
-  const segments = [].concat(req.query['...path'] ?? req.query.path ?? [])
-  const url = new URL(`${API_HOST}/${segments.join('/')}`)
+  const path = [].concat(req.query.path ?? []).join('/')
+  const url = new URL(`${API_HOST}/${path}`)
   for (const [k, v] of Object.entries(req.query)) {
-    if (k === 'path' || k === '...path' || k === '__debug') continue
+    if (k === 'path') continue
     for (const item of [].concat(v)) url.searchParams.append(k, item)
   }
   try {
