@@ -2,9 +2,7 @@
 
 NYC publishes 15-40 procurement notices every business day in the City Record: awards, solicitations, intents to award, hearings. The public dataset is a raw table with free-text descriptions that nobody reads. city-records pulls each day's notices from NYC Open Data (dataset `dg92-zbpx`, via the Socrata API), enriches them with a small LLM (what is being bought, product category, software/renewal flags, a plain-English summary), resolves vendor names to canonical vendors, and serves the result through a search dashboard and an MCP server, so people and agents can ask questions like "which agencies are buying software this month?".
 
-> **Status:** the hosted deployment (GKE cluster and Vercel dashboard) was taken down on 2026-10-12 to save cost. The code, data model and deploy scripts are complete; `infra/create-cluster.sh` followed by `infra/deploy.sh` brings it back in about 15 minutes. Data and Dagster run history are kept in Supabase.
-
-Snapshot at shutdown: 2026-09-01 to 2026-10-09, 667 procurement notices (about 24 per business day), 263 vendors, roughly $2.8B in awards, 100% enrichment coverage with mean confidence 0.94.
+Live demo (taken down to cut cost): https://city-records-one.vercel.app
 
 ## Architecture
 
